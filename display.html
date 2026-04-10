@@ -420,21 +420,55 @@ async function fetchElpris(){
 }
 
 // ── Bilder & video ──
+const MEDIA_EXT=/\.(jpg|jpeg|png|gif|webp|bmp|mp4|mov|webm)$/i;
+const VIDEO_EXT=['mp4','mov','webm'];
+
+async function loadPhotosViaApi() {
+  // Paginerad hämtning via proxy.php → share.cgi
+  const PAGE=1000; let offset=0, urls=[];
+  for(;;){
+    const r=await fetch('/proxy.php?act=list&limit='+PAGE+'&offset='+offset);
+    const json=await r.json();
+    if(offset===0) console.log('share.cgi first page:', JSON.stringify(json).slice(0,500));
+    const items=json.datas||json.data||json.files||[];
+    if(!items.length) break;
+    for(const item of items){
+      const fn=item.filename||item.name||'';
+      if(!MEDIA_EXT.test(fn)) continue;
+      const ext=fn.split('.').pop().toLowerCase();
+      const isVideo=VIDEO_EXT.includes(ext);
+      urls.push({url:'/proxy.php?act=image&filename='+encodeURIComponent(fn), name:fn.replace(/\.\w+$/,''), isVideo});
+    }
+    offset+=PAGE;
+    const total=json.total!=null?json.total:Infinity;
+    if(offset>=total||items.length<PAGE) break;
+  }
+  return urls;
+}
+
+async function loadPhotosViaHtml() {
+  // Fallback: parsa HTML-kataloglistning (webbservern kapar vid ~4000 filer)
+  const r=await fetch(BILDER_URL);
+  const html=await r.text();
+  const re=/href="([^"?#][^"]*\.(jpg|jpeg|png|gif|webp|bmp|mp4|mov|webm))"/gi;
+  let m,urls=[];
+  while((m=re.exec(html))!==null){
+    const f=m[1]; if(f.startsWith('/')||f.startsWith('http'))continue;
+    const ext=f.split('.').pop().toLowerCase();
+    const isVideo=VIDEO_EXT.includes(ext);
+    urls.push({url:BILDER_URL+f, name:decodeURIComponent(f).replace(/\.\w+$/,''), isVideo});
+  }
+  return urls;
+}
+
 async function loadPhotos() {
   const badge=document.getElementById('statusBadge');
   badge.textContent='Hämtar media...'; badge.className='status err';
   try {
-    const r=await fetch(BILDER_URL);
-    const html=await r.text();
-    const re=/href="([^"?#][^"]*\.(jpg|jpeg|png|gif|webp|bmp|mp4|mov|webm))"/gi;
-    let m,urls=[];
-    while((m=re.exec(html))!==null){
-      const f=m[1]; if(f.startsWith('/')||f.startsWith('http'))continue;
-      const ext=f.split('.').pop().toLowerCase();
-      const isVideo=['mp4','mov','webm'].includes(ext);
-      urls.push({url:BILDER_URL+f, name:decodeURIComponent(f).replace(/\.\w+$/,''), isVideo});
-    }
-    if(!urls.length)throw new Error('Ingen media');
+    let urls=[];
+    try { urls=await loadPhotosViaApi(); } catch(e){ console.warn('API-hämtning misslyckades, testar HTML-fallback:',e); }
+    if(!urls.length) urls=await loadPhotosViaHtml();
+    if(!urls.length) throw new Error('Ingen media');
     allPhotos=urls;
     badge.textContent=allPhotos.length+' filer · QNAP'; badge.className='status ok';
     buildQueue(); showPhoto(true); startTimer();
