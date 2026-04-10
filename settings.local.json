@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(update-config)",
+      "Bash(cp \"C:/CC/Familjeskärmen/display.html\" \"//Qnap/Web/display.html\")",
+      "Bash(cp \"C:/CC/Familjeskärmen/proxy.php\" \"//Qnap/Web/proxy.php\")",
+      "Bash(python:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}

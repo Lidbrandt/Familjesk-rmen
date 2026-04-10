@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cp 'C:/CC/Familjeskärmen/display.html' '//Qnap/Web/display.html' && cp 'C:/CC/Familjeskärmen/proxy.php' '//Qnap/Web/proxy.php' 2>/dev/null || true",
+            "timeout": 15,
+            "statusMessage": "Synkar till QNAP..."
+          }
+        ]
+      }
+    ]
+  }
+}

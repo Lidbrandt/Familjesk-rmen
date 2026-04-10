@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Köks-display</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Jost:wght@300;400&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width:100%; height:100%; background:#0f0d0b; overflow:hidden; font-family:'Jost',sans-serif; font-weight:300; color:#f0ebe3; }
+
+  .frame { width:100vw; height:100vh; display:grid; grid-template-columns:70% 30%; overflow:hidden; position:relative; }
+
+  .photo-bg { position:relative; overflow:hidden; background:#0f0d0b; }
+  .photo-bg img { width:100%; height:100%; object-fit:contain; transition:opacity 1.6s ease; }
+  .photo-overlay { position:absolute; inset:0; background:linear-gradient(to right,rgba(15,13,11,0.12),rgba(15,13,11,0.02)); }
+  .photo-name { position:absolute; bottom:32px; left:16px; font-size:14px; color:rgba(240,235,227,0.3); letter-spacing:0.08em; max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .ticker-wrap { position:absolute; bottom:0; left:0; right:0; background:rgba(15,13,11,0.7); border-top:1px solid rgba(240,235,227,0.06); padding:8px 16px; overflow:hidden; white-space:nowrap; }
+  .ticker-inner { display:inline-block; animation:ticker 35s linear infinite; }
+  .ticker-item { font-size:14px; color:#9a8e80; letter-spacing:0.04em; }
+  .ticker-sep  { margin:0 20px; color:#3a3028; }
+  @keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+  .status { position:absolute; top:12px; left:14px; font-size:12px; padding:3px 8px; border-radius:3px; letter-spacing:0.07em; }
+  .status.ok  { background:rgba(157,185,160,0.18); color:#9db9a0; border:1px solid rgba(157,185,160,0.28); }
+  .status.err { background:rgba(184,132,122,0.18); color:#b8847a; border:1px solid rgba(184,132,122,0.28); }
+  .last-reload { position:absolute; bottom:36px; right:14px; font-size:10px; color:rgba(240,235,227,0.2); letter-spacing:0.04em; }
+
+  .todo-section { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  .transit-stop { margin-bottom:10px; }
+  .transit-stop:last-child { margin-bottom:0; }
+  .transit-stop-name { font-size:16px; color:#8a7e72; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid rgba(240,235,227,0.08); }
+  .transit-rows { display:flex; flex-direction:column; gap:6px; }
+  .transit-row { display:flex; align-items:center; gap:8px; }
+  .transit-type { font-size:16px; flex-shrink:0; width:22px; text-align:center; }
+  .transit-line { font-size:15px; font-weight:500; min-width:36px; text-align:center; padding:2px 6px; border-radius:2px; flex-shrink:0; }
+  .transit-line.bus   { background:rgba(100,140,220,0.22); color:#90b8f0; }
+  .transit-line.train { background:rgba(201,169,122,0.22); color:#c9a97a; }
+  .transit-dest  { font-size:15px; color:#d8d0c4; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .transit-clock { font-size:14px; color:#9a8e82; min-width:42px; text-align:right; flex-shrink:0; }
+  .transit-mins  { font-size:16px; color:#f0ebe3; font-weight:500; min-width:52px; text-align:right; flex-shrink:0; }
+  .transit-mins.soon { color:#c9a97a; }
+  .transit-loading { font-size:15px; color:#6a6055; }
+
+  /* ── Panel ── */
+  .panel { background:rgba(15,13,11,0.86); border-left:1px solid rgba(240,235,227,0.06); display:flex; flex-direction:column; padding:16px 18px 14px; overflow:hidden; }
+  .clock-block { text-align:center; padding-bottom:12px; border-bottom:1px solid rgba(240,235,227,0.08); margin-bottom:12px; flex-shrink:0; }
+  .clock-time { font-family:'Cormorant Garamond',serif; font-weight:300; font-size:clamp(48px,6.5vw,96px); letter-spacing:-1px; line-height:1; color:#f0ebe3; }
+  .clock-date { font-size:16px; letter-spacing:0.17em; text-transform:uppercase; color:#9a8e82; margin-top:4px; }
+  .weather-block { padding-bottom:12px; border-bottom:1px solid rgba(240,235,227,0.12); margin-bottom:12px; flex-shrink:0; display:flex; justify-content:center; }
+  .w-section { display:inline-flex; gap:20px; }
+  .w-section-label { font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:#8a7e72; margin-bottom:4px; text-align:center; }
+  .w-group { display:flex; flex-direction:column; gap:4px; }
+  .w-group-days { display:flex; gap:4px; }
+  .w-day  { flex:1; background:rgba(240,235,227,0.04); border-radius:4px; padding:8px 4px; text-align:center; }
+  .w-day-label { font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:#5a5045; margin-bottom:2px; }
+  .w-day-icon  { font-size:20px; line-height:1.2; }
+  .w-day-temps { font-size:13px; color:#9a8e82; }
+  .w-day-temps .hi { color:#f0ebe3; font-weight:400; }
+  .w-day.today { background:rgba(240,235,227,0.08); }
+  .cal-section { flex:0 1 auto; display:flex; flex-direction:column; overflow:hidden; padding-bottom:16px; border-bottom:1px solid rgba(240,235,227,0.12); margin-bottom:12px; }
+  .elspot-section { padding-bottom:10px; border-bottom:1px solid rgba(240,235,227,0.12); margin-bottom:10px; flex-shrink:0; }
+  .elspot-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+  .elspot-now { font-size:13px; color:#9a8e82; }
+  .elspot-now .price { font-family:'Cormorant Garamond',serif; font-size:22px; color:#f0ebe3; }
+  .elspot-now .unit { font-size:11px; color:#6a6055; }
+  .elspot-label { font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:#8a7e72; }
+  .elspot-bar-wrap { display:flex; align-items:flex-end; gap:1px; height:32px; }
+  .elspot-bar { flex:1; min-width:0; border-radius:1px 1px 0 0; transition:background 0.3s; }
+  .elspot-bar.low { background:rgba(157,185,160,0.5); }
+  .elspot-bar.mid { background:rgba(200,170,80,0.5); }
+  .elspot-bar.high { background:rgba(184,132,122,0.5); }
+  .elspot-bar.now { outline:1px solid #f0ebe3; }
+  .elspot-hours { display:flex; gap:1px; margin-top:2px; }
+  .elspot-hours span { flex:1; font-size:8px; color:#5a5045; text-align:center; }
+  .waste-section { display:flex; gap:8px; padding-bottom:12px; border-bottom:1px solid rgba(240,235,227,0.12); margin-bottom:12px; flex-shrink:0; }
+  .waste-item { flex:1; display:flex; align-items:center; gap:8px; background:rgba(240,235,227,0.04); border-radius:4px; padding:6px 10px; }
+  .waste-item.tomorrow { background:rgba(200,170,80,0.15); border:1px solid rgba(200,170,80,0.3); }
+  .waste-item.today { background:rgba(184,132,122,0.18); border:1px solid rgba(184,132,122,0.3); }
+  .waste-icon { font-size:18px; }
+  .waste-info { display:flex; flex-direction:column; }
+  .waste-type { font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#8a7e72; }
+  .waste-date { font-size:13px; color:#f0ebe3; }
+  .waste-popup { position:fixed; top:50%; left:35%; transform:translate(-50%,-50%); background:rgba(30,26,22,0.95); border:2px solid rgba(200,170,80,0.5); border-radius:12px; padding:28px 36px; text-align:center; z-index:100; animation:popIn 0.5s ease; box-shadow:0 8px 40px rgba(0,0,0,0.6); }
+  .waste-popup-icon { font-size:48px; margin-bottom:8px; }
+  .waste-popup-title { font-size:22px; color:#f0ebe3; font-family:'Cormorant Garamond',serif; margin-bottom:4px; }
+  .waste-popup-sub { font-size:14px; color:#9a8e82; }
+  @keyframes popIn { from{opacity:0;transform:translate(-50%,-50%) scale(0.8)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+  .section-label { font-size:16px; letter-spacing:0.15em; text-transform:uppercase; color:#8a7e72; margin-bottom:8px; flex-shrink:0; }
+  .cal-events { flex:1; display:flex; flex-direction:column; gap:8px; overflow:hidden; }
+  .event-row  { display:flex; gap:10px; align-items:flex-start; }
+  .event-dot  { width:7px; height:7px; border-radius:50%; margin-top:6px; flex-shrink:0; }
+  .event-dot.c1{background:#c9a97a;} .event-dot.c2{background:#9db9a0;} .event-dot.c3{background:#b0a4c2;} .event-dot.c4{background:#b8847a;}
+  .event-day  { font-size:16px; color:#8a7e72; }
+  .event-time { font-size:16px; color:#9a8e82; }
+  .event-title{ font-size:18px; color:#e8e0d6; line-height:1.35; display:block; }
+  .todo-section { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  #transitContent { margin-top:0; }
+  .transit-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .transit-header span { font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:#5a5045; }
+  .th-spacer { width:22px; flex-shrink:0; }
+  .th-line   { min-width:36px; flex-shrink:0; }
+  .th-dest   { flex:1; }
+  .th-clock  { min-width:42px; text-align:right; flex-shrink:0; }
+  .th-arrive { min-width:42px; text-align:right; flex-shrink:0; }
+  .th-mins   { min-width:52px; text-align:right; flex-shrink:0; }
+  .transit-arrive { font-size:14px; color:#7a7468; min-width:42px; text-align:right; flex-shrink:0; }
+
+  .settings-btn { position:absolute; top:12px; right:12px; background:rgba(240,235,227,0.05); border:1px solid rgba(240,235,227,0.09); color:#4a4035; font-size:13px; border-radius:50%; width:26px; height:26px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .settings-btn:hover { background:rgba(240,235,227,0.12); color:#8a7e72; }
+
+  .settings-overlay { position:fixed; inset:0; background:rgba(15,13,11,0.96); display:none; flex-direction:column; padding:28px 32px; gap:14px; overflow-y:auto; z-index:100; }
+  .settings-overlay.open { display:flex; }
+  .s-title { font-family:'Cormorant Garamond',serif; font-size:24px; color:#f0ebe3; }
+  .s-sub   { font-size:11px; color:#4a4035; margin-top:-8px; }
+  .s-close { margin-left:auto; background:none; border:1px solid rgba(240,235,227,0.15); color:#8a7e72; border-radius:4px; padding:4px 10px; cursor:pointer; font-size:11px; font-family:'Jost',sans-serif; }
+  .s-grid  { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .s-group label { display:block; font-size:9px; letter-spacing:0.14em; text-transform:uppercase; color:#5a5045; margin-bottom:4px; }
+  .s-group input, .s-group textarea { width:100%; background:rgba(240,235,227,0.04); border:1px solid rgba(240,235,227,0.09); color:#d9d0c4; border-radius:4px; padding:7px 9px; font-size:11px; font-family:'Jost',sans-serif; outline:none; resize:vertical; }
+  .s-group input:focus, .s-group textarea:focus { border-color:rgba(201,169,122,0.4); }
+  .s-hint { font-size:10px; color:#3a3028; margin-top:3px; }
+  .s-save { background:rgba(201,169,122,0.12); border:1px solid rgba(201,169,122,0.35); color:#c9a97a; border-radius:4px; padding:9px 18px; cursor:pointer; font-size:12px; font-family:'Jost',sans-serif; }
+  .s-div  { border:none; border-top:1px solid rgba(240,235,227,0.06); margin:2px 0; }
+  .tog-row { display:flex; align-items:center; gap:8px; }
+  .tog { width:30px; height:16px; background:rgba(240,235,227,0.1); border-radius:8px; position:relative; cursor:pointer; flex-shrink:0; transition:background 0.2s; }
+  .tog.on { background:rgba(157,185,160,0.45); }
+  .tog::after { content:''; position:absolute; left:2px; top:2px; width:12px; height:12px; border-radius:50%; background:#5a5045; transition:left 0.2s; }
+  .tog.on::after { left:16px; background:#9db9a0; }
+  .tog-label { font-size:11px; color:#c0b7a9; }
+</style>
+</head>
+<body>
+<div id="wastePopup"></div>
+<div class="frame">
+  <div class="photo-bg">
+    <img id="mainPhoto" src="" alt="" style="opacity:0;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;">
+    <video id="mainVideo" src="" muted playsinline style="opacity:0;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;"></video>
+    <div class="photo-overlay"></div>
+    <div class="status err" id="statusBadge">Ansluter...</div>
+    <div class="last-reload" id="lastReload"></div>
+    <div class="photo-name" id="photoName"></div>
+    <div class="ticker-wrap"><div class="ticker-inner" id="ticker"></div></div>
+  </div>
+
+  <div class="panel">
+    <div class="clock-block">
+      <div class="clock-time" id="clockTime">00:00</div>
+      <div class="clock-date" id="clockDate">–</div>
+    </div>
+    <div class="weather-block" id="weatherBlock">
+      <div class="w-days" id="wDays"><div class="w-desc" id="wDesc" style="color:#9a8e82;font-size:14px">Hämtar väder...</div></div>
+    </div>
+    <div class="elspot-section" id="elspotSection"></div>
+    <div class="cal-section">
+      <div class="section-label">Kalender</div>
+      <div class="cal-events" id="calEvents"></div>
+    </div>
+    <div class="waste-section" id="wasteSection"></div>
+    <div class="todo-section" id="todoSection" style="margin-top:auto;">
+      <span id="transitUpdated" style="display:none"></span>
+      <div class="transit-header">
+        <span class="th-spacer"></span><span class="th-line"></span><span class="th-dest"></span>
+        <span class="th-clock">Avgång</span><span class="th-arrive">Framme</span><span class="th-mins">Går om</span>
+      </div>
+      <div id="transitContent"><div class="transit-loading">Hämtar avgångar...</div></div>
+    </div>
+  </div>
+  <button class="settings-btn" onclick="openSettings()">⚙</button>
+</div>
+
+<div class="settings-overlay" id="settingsOverlay">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div><div class="s-title">Inställningar</div><div class="s-sub">Köks-display · Samsung The Frame</div></div>
+    <button class="s-close" onclick="closeSettings()">Stäng</button>
+  </div>
+  <hr class="s-div">
+  <div class="s-grid">
+    <div class="s-group"><label>Sekunder per bild</label><input type="text" id="sInterval" placeholder="15"></div>
+    <div class="s-group"><label>Stad (väder)</label><input type="text" id="sCity" placeholder="Stockholm"></div>
+  </div>
+  <hr class="s-div">
+  <div class="s-group">
+    <label>Extra kalendrar — iCal-adresser (en per rad)</label>
+    <textarea id="sGcalIds" rows="3" placeholder="https://calendar.google.com/calendar/ical/..."></textarea>
+    <div class="s-hint">Familjekalendern är redan inbyggd.</div>
+  </div>
+  <div class="s-group">
+    <label>Manuella händelser — reserv (DATUM|HH:MM|Titel|c1-c4)</label>
+    <textarea id="sEvents" rows="4" placeholder="idag|08:30|Frukostmöte|c1"></textarea>
+    <div class="s-hint">Färger: c1=guld · c2=grön · c3=lila · c4=terrakotta</div>
+  </div>
+  <div class="s-group"><label>Att göra (en per rad)</label><textarea id="sTodo" rows="4" placeholder="Handla mjölk"></textarea></div>
+  <div class="s-group"><label>Nyhetsremsa (en rubrik per rad)</label><textarea id="sNews" rows="3" placeholder="SVT: Solen skiner..."></textarea></div>
+  <hr class="s-div">
+  <div style="display:flex;gap:18px;flex-wrap:wrap">
+    <div class="tog-row"><div class="tog on" id="togWeather" onclick="this.classList.toggle('on')"></div><span class="tog-label">Väder</span></div>
+    <div class="tog-row"><div class="tog on" id="togNews"    onclick="this.classList.toggle('on')"></div><span class="tog-label">Nyhetsremsa</span></div>
+    <div class="tog-row"><div class="tog on" id="togTodo"    onclick="this.classList.toggle('on')"></div><span class="tog-label">Att göra</span></div>
+    <div class="tog-row"><div class="tog on" id="togShuffle" onclick="this.classList.toggle('on')"></div><span class="tog-label">Slumpa bilder</span></div>
+    <div class="tog-row"><div class="tog on" id="togTransit" onclick="this.classList.toggle('on')"></div><span class="tog-label">Avgångstavla</span></div>
+  </div>
+  <button class="s-save" onclick="saveSettings()">Spara inställningar</button>
+</div>
+
+<script>
+// ── Konstanter ──
+const BILDER_URL = '/bilder/';
+const ICAL_URL   = 'https://calendar.google.com/calendar/ical/4823aaafb41317885644ca4c2b7bdf81e86b1493d5c2db6b5039caba6a8f160e%40group.calendar.google.com/public/basic.ics';
+const SL_API     = 'https://transport.integration.sl.se/v1';
+
+// Hållplatser med korrekta korta ID:n från transport.integration.sl.se
+const STOPS = [
+  { name: 'Lindhemsvägen',       id: '5344', trainOnly: false, travelMin: 8  },
+  { name: 'Truckvägen',          id: '5343', trainOnly: false, travelMin: 6  },
+  { name: 'Rondellen',           id: '5340', trainOnly: false, travelMin: 4  },
+  { name: 'Väsby stn pendeltåg', id: '9502', trainOnly: true,  travelMin: 20 },
+];
+
+const DAY_SV = ['Söndag','Måndag','Tisdag','Onsdag','Torsdag','Fredag','Lördag'];
+const MON_SV = ['januari','februari','mars','april','maj','juni','juli','augusti','september','oktober','november','december'];
+
+const DEFAULTS = {
+  interval:11, shuffle:true, city:'Stockholm',
+  gcalIds:[], showWeather:true, showNews:true, showTodo:true, showTransit:true,
+  events:[], todos:[{text:'Handla till middag',done:false},{text:'Ringa förskolan',done:false}],
+  news:['Familjedisplayen är igång — klicka ⚙ för att anpassa'],
+};
+
+let S = loadState();
+let allPhotos=[], photoQueue=[], photoIdx=0, slideTimer=null, lastPhotoUrl=null;
+const W_LAT = 59.52, W_LON = 17.91;
+const TIBBER_TOKEN='713D4B3485018A6E6CCF7C18960F85BEEB14E9EB3675BEAD31C0776CC24CFB57-1';
+const ELNAT_ORE=26.3; // Elon Elnät överföring inkl moms (21.04 öre exkl moms)
+const WASTE_DATES = {
+  matavfall: ['2026-04-15','2026-04-29','2026-05-13','2026-05-27','2026-06-03','2026-06-10','2026-06-17','2026-06-24','2026-07-01','2026-07-08','2026-07-15','2026-07-22','2026-07-29','2026-08-05','2026-08-12','2026-08-19','2026-08-26','2026-09-02','2026-09-16','2026-09-30','2026-10-14','2026-10-28','2026-11-11','2026-11-25','2026-12-09','2026-12-23'],
+  restavfall: ['2026-04-15','2026-04-29','2026-05-13','2026-05-27','2026-06-10','2026-06-24','2026-07-08','2026-07-22','2026-08-05','2026-08-19','2026-09-02','2026-09-16','2026-09-30','2026-10-14','2026-10-28','2026-11-11','2026-11-25','2026-12-09','2026-12-23']
+};
+
+init();
+
+function init() {
+  const now=new Date();
+  document.getElementById('lastReload').textContent='Laddad '+pad(now.getHours())+':'+pad(now.getMinutes())+' '+now.getDate()+'/'+pad(now.getMonth()+1);
+  tickClock(); setInterval(tickClock, 10000);
+  applyVisibility();
+  renderTicker(S.news);
+  renderEvents(S.events);
+  renderWaste();
+  fetchWeather();
+  fetchElpris();
+  setInterval(fetchElpris, 60*60*1000);
+  setInterval(()=>fetchWeather(), 30*60*1000);
+  fetchNews();
+  setInterval(fetchNews, 15*60*1000);
+  loadPhotos();
+  setInterval(loadPhotos, 30*60*1000);
+  fetchGoogleCalendar();
+  setInterval(()=>fetchGoogleCalendar(), 15*60*1000);
+  fetchDepartures();
+  setInterval(fetchDepartures, 60*1000);
+  setTimeout(()=>location.reload(), 60*60*1000);
+}
+
+// ── Klocka ──
+function tickClock() {
+  const n=new Date();
+  document.getElementById('clockTime').textContent=pad(n.getHours())+':'+pad(n.getMinutes());
+  document.getElementById('clockDate').textContent=DAY_SV[n.getDay()]+' '+n.getDate()+' '+MON_SV[n.getMonth()];
+}
+function pad(n){return String(n).padStart(2,'0');}
+
+// ── Väder (Upplands Väsby) ──
+async function fetchWeather() {
+  try {
+    const w = await fetch('https://api.open-meteo.com/v1/forecast?latitude='+W_LAT+'&longitude='+W_LON
+      +'&hourly=temperature_2m,weather_code'
+      +'&daily=weather_code,temperature_2m_max,temperature_2m_min'
+      +'&past_days=1&forecast_days=2&timezone=auto');
+    const wd = await w.json();
+    const days=wd.daily;
+    const h=wd.hourly;
+
+    // Hjälpfunktion: aggregera timdata för ett tidsintervall
+    function period(dayIdx,startH,endH){
+      const date=days.time[dayIdx];
+      let temps=[],codes=[];
+      for(let i=0;i<h.time.length;i++){
+        if(!h.time[i].startsWith(date)) continue;
+        const hr=parseInt(h.time[i].substring(11,13));
+        if(hr>=startH&&hr<endH){temps.push(h.temperature_2m[i]);codes.push(h.weather_code[i]);}
+      }
+      const hi=temps.length?Math.round(Math.max(...temps)):'-';
+      const lo=temps.length?Math.round(Math.min(...temps)):'-';
+      const code=codes.length?codes[Math.floor(codes.length/2)]:0;
+      return {hi,lo,code};
+    }
+
+    // Tre perioder per dag
+    const yFm=period(0,7,12), yEm=period(0,12,17), yKv=period(0,17,23);
+    const tFm=period(1,7,12), tEm=period(1,12,17), tKv=period(1,17,23);
+    const mFm=period(2,7,12), mEm=period(2,12,17), mKv=period(2,17,23);
+
+    function dayBlock(label,code,hi,lo,cls){
+      return `<div class="w-day${cls}">
+        <div class="w-day-label">${label}</div>
+        <div class="w-day-icon">${wIcon(code)}</div>
+        <div class="w-day-temps"><span class="hi">${hi}°</span> / ${lo}°</div>
+      </div>`;
+    }
+
+    function groupHtml(label,fm,em,kv,cls){
+      return `<div class="w-group"><div class="w-section-label">${label}</div><div class="w-group-days">`
+        +dayBlock('07–12',fm.code,fm.hi,fm.lo,cls)
+        +dayBlock('12–17',em.code,em.hi,em.lo,cls)
+        +dayBlock('17–23',kv.code,kv.hi,kv.lo,cls)
+        +`</div></div>`;
+    }
+
+    let html='<div class="w-section">';
+    html+=groupHtml('Igår',yFm,yEm,yKv,'');
+    html+=groupHtml('Idag',tFm,tEm,tKv,' today');
+    html+=groupHtml('Imorgon',mFm,mEm,mKv,'');
+    html+=`</div>`;
+    document.getElementById('wDays').innerHTML=html;
+  } catch(e){document.getElementById('wDays').innerHTML='<span style="color:#9a8e82;font-size:14px">Ej tillgängligt</span>';}
+}
+function wIcon(c){return c===0?'☀️':c<=2?'⛅':c<=3?'☁️':c<=67?'🌧':c<=77?'🌨':'⛈';}
+function wDesc(c){return c===0?'Klart':c<=2?'Delvis molnigt':c<=3?'Mulet':c<=48?'Dimma':c<=55?'Duggregn':c<=67?'Regn':c<=77?'Snöfall':c<=82?'Skurar':'Åska';}
+
+// ── Sophamtning ──
+function renderWaste(){
+  const now=new Date(); now.setHours(0,0,0,0);
+  const tomorrow=new Date(now); tomorrow.setDate(tomorrow.getDate()+1);
+  const fmt=d=>d.toISOString().substring(0,10);
+
+  function nextPickup(dates){
+    for(const d of dates){if(d>=fmt(now)) return d;}
+    return null;
+  }
+
+  function label(dateStr){
+    const d=new Date(dateStr+'T00:00:00');
+    if(fmt(d)===fmt(now)) return {text:'Idag!', cls:' today'};
+    if(fmt(d)===fmt(tomorrow)) return {text:'Imorgon!', cls:' tomorrow'};
+    const diff=Math.ceil((d-now)/(1000*60*60*24));
+    return {text:DAY_SV[d.getDay()]+' '+d.getDate()+'/'+(d.getMonth()+1)+' ('+diff+' dgr)', cls:''};
+  }
+
+  const items=[
+    {type:'Matavfall', icon:'🟤', next:nextPickup(WASTE_DATES.matavfall)},
+    {type:'Restavfall', icon:'⚫', next:nextPickup(WASTE_DATES.restavfall)}
+  ];
+
+  let html='';
+  let popupHtml='';
+  for(const it of items){
+    if(!it.next) continue;
+    const l=label(it.next);
+    html+=`<div class="waste-item${l.cls}">
+      <div class="waste-icon">${it.icon}</div>
+      <div class="waste-info"><div class="waste-type">${it.type}</div><div class="waste-date">${l.text}</div></div>
+    </div>`;
+    if(l.cls===' tomorrow'){
+      popupHtml+=`<div class="waste-popup-icon">${it.icon}</div>
+        <div class="waste-popup-title">Ställ ut ${it.type.toLowerCase()}!</div>
+        <div class="waste-popup-sub">Hämtas imorgon</div>`;
+    }
+  }
+  document.getElementById('wasteSection').innerHTML=html;
+  const popup=document.getElementById('wastePopup');
+  if(popupHtml){
+    popup.innerHTML=`<div class="waste-popup">${popupHtml}</div>`;
+    setTimeout(()=>{popup.innerHTML='';},15000);
+  } else {
+    popup.innerHTML='';
+  }
+}
+
+// ── Elpris (Tibber + Elon Elnät) ──
+async function fetchElpris(){
+  try {
+    const r=await fetch('/proxy.php?act=tibber&token='+TIBBER_TOKEN+'&_='+Date.now());
+    const d=await r.json();
+    const info=d.data.viewer.homes[0].currentSubscription.priceInfo;
+    const nowPrice=Math.round(info.current.total*100+ELNAT_ORE);
+    const level=info.current.level;
+    const levelSv={'VERY_CHEAP':'Mycket billigt','CHEAP':'Billigt','NORMAL':'Normalt','EXPENSIVE':'Dyrt','VERY_EXPENSIVE':'Mycket dyrt'};
+    const levelCls={'VERY_CHEAP':'low','CHEAP':'low','NORMAL':'mid','EXPENSIVE':'high','VERY_EXPENSIVE':'high'};
+
+    const todayPrices=info.today||[];
+    const tomorrowPrices=info.tomorrow||[];
+    const allPrices=[...todayPrices,...tomorrowPrices];
+    const nowH=new Date().getHours();
+    const max=Math.max(...todayPrices.map(p=>p.total),0.01);
+
+    let barsHtml='';
+    let hoursHtml='';
+    for(let h=0;h<todayPrices.length;h++){
+      const p=todayPrices[h];
+      const ore=Math.round(p.total*100+ELNAT_ORE);
+      const pct=Math.max(((p.total*100+ELNAT_ORE)/(max*100+ELNAT_ORE))*100,2);
+      const cls=levelCls[p.level]||'mid';
+      const now=h===nowH?' now':'';
+      barsHtml+=`<div class="elspot-bar ${cls}${now}" style="height:${pct}%" title="${h}:00 — ${ore} öre"></div>`;
+      if(h%3===0) hoursHtml+=`<span>${pad(h)}</span>`; else hoursHtml+=`<span></span>`;
+    }
+
+    document.getElementById('elspotSection').innerHTML=`
+      <div class="elspot-header">
+        <div class="elspot-label">Elpris inkl nät — ${levelSv[level]||level}</div>
+        <div class="elspot-now"><span class="price">${nowPrice}</span> <span class="unit">öre/kWh</span></div>
+      </div>
+      <div class="elspot-bar-wrap">${barsHtml}</div>
+      <div class="elspot-hours">${hoursHtml}</div>`;
+  } catch(e){document.getElementById('elspotSection').innerHTML='';}
+}
+
+// ── Bilder & video ──
+async function loadPhotos() {
+  const badge=document.getElementById('statusBadge');
+  badge.textContent='Hämtar media...'; badge.className='status err';
+  try {
+    const r=await fetch(BILDER_URL);
+    const html=await r.text();
+    const re=/href="([^"?#][^"]*\.(jpg|jpeg|png|gif|webp|bmp|mp4|mov|webm))"/gi;
+    let m,urls=[];
+    while((m=re.exec(html))!==null){
+      const f=m[1]; if(f.startsWith('/')||f.startsWith('http'))continue;
+      const ext=f.split('.').pop().toLowerCase();
+      const isVideo=['mp4','mov','webm'].includes(ext);
+      urls.push({url:BILDER_URL+f, name:decodeURIComponent(f).replace(/\.\w+$/,''), isVideo});
+    }
+    if(!urls.length)throw new Error('Ingen media');
+    allPhotos=urls;
+    badge.textContent=allPhotos.length+' filer · QNAP'; badge.className='status ok';
+    buildQueue(); showPhoto(true); startTimer();
+  } catch(e){
+    badge.textContent='Kunde inte hämta bilder'; badge.className='status err';
+    setTimeout(loadPhotos,20000);
+  }
+}
+
+function buildQueue() {
+  photoQueue=[...allPhotos];
+  if(S.shuffle!==false){
+    for(let i=photoQueue.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[photoQueue[i],photoQueue[j]]=[photoQueue[j],photoQueue[i]];}
+    if(photoQueue.length>1&&lastPhotoUrl&&photoQueue[0].url===lastPhotoUrl){const swap=Math.floor(Math.random()*(photoQueue.length-1))+1;[photoQueue[0],photoQueue[swap]]=[photoQueue[swap],photoQueue[0]];}
+  }
+  photoIdx=0;
+}
+
+function showPhoto(immediate) {
+  if(!photoQueue.length)return;
+  if(photoIdx>=photoQueue.length)buildQueue();
+  const item=photoQueue[photoIdx++]; lastPhotoUrl=item.url;
+  const img=document.getElementById('mainPhoto');
+  const vid=document.getElementById('mainVideo');
+  document.getElementById('photoName').textContent=item.name||'';
+
+  if(item.isVideo){
+    // Visa video
+    clearInterval(slideTimer);
+    if(immediate){
+      img.style.opacity=0;
+      vid.src=item.url; vid.style.opacity=1; vid.play();
+    } else {
+      img.style.opacity=0; vid.style.opacity=0;
+      setTimeout(()=>{ vid.src=item.url; vid.style.opacity=1; vid.play(); },900);
+    }
+    // Gå vidare till nästa när videon är klar
+    vid.onended=()=>{ vid.style.opacity=0; showPhoto(false); startTimer(); };
+  } else {
+    // Visa bild
+    vid.pause(); vid.src=''; vid.style.opacity=0;
+    if(immediate){
+      img.src=item.url; img.style.opacity=1;
+    } else {
+      img.style.opacity=0;
+      setTimeout(()=>{ img.src=item.url; img.style.opacity=1; },900);
+    }
+  }
+}
+
+function startTimer(){
+  clearInterval(slideTimer);
+  slideTimer=setInterval(()=>showPhoto(false),Math.max(5,parseInt(S.interval)||15)*1000);
+}
+
+// ── SL Avgångar ──
+async function fetchDepartures() {
+  if(S.showTransit===false) return;
+  const el  = document.getElementById('transitContent');
+  const now = new Date();
+  let html  = '';
+
+  for(const stop of STOPS) {
+    try {
+      const r = await fetch(SL_API+'/sites/'+stop.id+'/departures?forecast=30');
+      const d = await r.json();
+      const deps = (d.departures||[])
+        .filter(dep => dep.state !== 'CANCELLED')
+        .filter(dep => !stop.trainOnly || (dep.line?.transport_mode||'').toUpperCase() === 'TRAIN')
+        .filter(dep => {
+          const mode = (dep.line?.transport_mode||'').toUpperCase();
+          const dest = (dep.destination||'').toLowerCase();
+          const dir  = (dep.direction||'').toLowerCase();
+          if(mode === 'TRAIN') {
+            // Pendeltåg — bara söderut, filtrera bort mot Märsta/Uppsala/Arlanda
+            const norrut = ['märsta','uppsala','arlanda','knivsta','tierp','gävle','enköping'];
+            return !norrut.some(n => dest.includes(n) || dir.includes(n));
+          } else {
+            // Bussar — bara mot Upplands Väsby station
+            return dest.includes('upplands väsby') || dir.includes('upplands väsby');
+          }
+        })
+        .slice(0, 3);
+
+      if(!deps.length) {
+        html += `<div class="transit-stop"><div class="transit-stop-name">${stop.name}</div><div class="transit-loading">Inga avgångar</div></div>`;
+        continue;
+      }
+
+      const rows = deps.map(dep => {
+        const line    = dep.line?.designation || dep.line?.id || '?';
+        const dest    = dep.destination || '';
+        const mode    = (dep.line?.transport_mode||'').toUpperCase();
+        const isTrain = mode === 'TRAIN';
+        const typeIcon = isTrain ? '🚆' : '🚌';
+        const exp     = dep.expected || dep.scheduled || '';
+        let clockStr  = '';
+        let arriveStr = '';
+        let minStr    = '';
+        if(exp) {
+          const depDate = new Date(exp);
+          const diff    = Math.round((depDate - now) / 60000);
+          clockStr = pad(depDate.getHours()) + ':' + pad(depDate.getMinutes());
+          const arrDate = new Date(depDate.getTime() + stop.travelMin * 60000);
+          arriveStr = pad(arrDate.getHours()) + ':' + pad(arrDate.getMinutes());
+          minStr   = diff <= 0 ? 'Nu' : diff + ' min';
+        }
+        const soon = (minStr === 'Nu' || parseInt(minStr) <= 5);
+        return `<div class="transit-row">
+          <span class="transit-type">${typeIcon}</span>
+          <span class="transit-line ${isTrain?'train':'bus'}">${line}</span>
+          <span class="transit-dest">${dest}</span>
+          <span class="transit-clock">${clockStr}</span>
+          <span class="transit-arrive">${arriveStr}</span>
+          <span class="transit-mins${soon?' soon':''}">${minStr}</span>
+        </div>`;
+      }).join('');
+
+      html += `<div class="transit-stop"><div class="transit-stop-name">${stop.name}</div><div class="transit-rows">${rows}</div></div>`;
+    } catch(e) {
+      html += `<div class="transit-stop"><div class="transit-stop-name">${stop.name}</div><div class="transit-loading">Ej tillgänglig</div></div>`;
+    }
+  }
+
+  el.innerHTML = html;
+  const t = new Date();
+  document.getElementById('transitUpdated').textContent = pad(t.getHours())+':'+pad(t.getMinutes());
+}
+
+// ── Google Kalender via iCal ──
+async function fetchGoogleCalendar() {
+  const urls=[ICAL_URL,...(S.gcalIds||[])];
+  const colors=['c2','c1','c3','c4'];
+  let allEvs=[];
+  for(let i=0;i<urls.length;i++){
+    try{const r=await fetch('/proxy.php?act=ical&url='+encodeURIComponent(urls[i]));const text=await r.text();allEvs=allEvs.concat(parseIcal(text,colors[i%colors.length]));}
+    catch(e){console.error('iCal fel:',e);}
+  }
+  if(allEvs.length){allEvs.sort((a,b)=>a.ts-b.ts);renderEvents(allEvs.slice(0,10));}
+}
+
+function parseIcal(text,color){
+  color=color||'c2';
+  const now=new Date(),maxDay=new Date(now.getTime()+14*86400000),evs=[];
+  const blocks=text.split('BEGIN:VEVENT');
+  for(let i=1;i<blocks.length;i++){
+    const b=blocks[i];
+    const summary=(b.match(/SUMMARY:(.+)/)?.[1]||'').trim().replace(/\\,/g,',').replace(/\\n/g,' ');
+    const dtRaw=(b.match(/DTSTART[^:]*:(\S+)/)?.[1]||'').trim();
+    if(!dtRaw||!summary)continue;
+    const date=parseIcalDate(dtRaw);
+    if(!date)continue;
+    const today=new Date();today.setHours(0,0,0,0);
+    if(date<today||date>maxDay)continue;
+    const tom=new Date(today.getTime()+86400000);
+    let dl=date>=today&&date<tom?'idag':date>=tom&&date<new Date(tom.getTime()+86400000)?'imorgon':date.getDate()+'/'+(date.getMonth()+1);
+    const allDay=dtRaw.replace(/[TZ]/g,'').length===8;
+    const time=allDay?'Heldag':pad(date.getHours())+':'+pad(date.getMinutes());
+    evs.push({date:dl,time,title:summary,color,ts:date.getTime()});
+  }
+  return evs;
+}
+
+function parseIcalDate(str){
+  str=str.replace(/[TZ]/g,'');
+  if(str.length===8)return new Date(+str.slice(0,4),+str.slice(4,6)-1,+str.slice(6,8));
+  if(str.length>=12)return new Date(+str.slice(0,4),+str.slice(4,6)-1,+str.slice(6,8),+str.slice(8,10),+str.slice(10,12));
+  return null;
+}
+
+function renderEvents(events){
+  const el=document.getElementById('calEvents');
+  if(!events||!events.length){el.innerHTML='<div style="font-size:9px;color:#3a3028">Hämtar kalender...</div>';return;}
+  el.innerHTML=events.slice(0,10).map(ev=>{
+    const dl=ev.date==='idag'?'Idag':ev.date==='imorgon'?'Imorgon':ev.date;
+    return`<div class="event-row"><div class="event-dot ${ev.color||'c2'}"></div><div><span class="event-day">${dl}</span> <span class="event-time">${ev.time}</span><span class="event-title">${ev.title}</span></div></div>`;
+  }).join('');
+}
+
+function renderTodo(items){
+  const el=document.getElementById('todoItems');
+  if(!el) return; // element borttaget
+  if(!items||!items.length){el.innerHTML='<div style="font-size:9px;color:#3a3028">Inga uppgifter</div>';return;}
+  el.innerHTML=items.slice(0,7).map((item,i)=>`<div class="todo-item" onclick="toggleTodo(${i})"><div class="todo-box ${item.done?'done':''}"></div><span class="todo-text ${item.done?'done':''}">${item.text}</span></div>`).join('');
+}
+function toggleTodo(i){if(S.todos&&S.todos[i]){S.todos[i].done=!S.todos[i].done;save();renderTodo(S.todos);}}
+
+async function fetchNews(){
+  try {
+    const r=await fetch('/proxy.php?act=rss&url=https://www.svd.se/feed/articles.rss&limit=5');
+    const titles=await r.json();
+    if(titles.length) renderTicker(titles);
+  } catch(e){}
+}
+
+function renderTicker(items){
+  const el=document.getElementById('ticker');
+  const list=(items&&items.length)?items:DEFAULTS.news;
+  el.innerHTML=[...list,...list].map(s=>`<span class="ticker-item">${s}</span><span class="ticker-sep">◆</span>`).join('');
+}
+
+function applyVisibility(){
+  const wb = document.getElementById('weatherBlock');
+  const tw = document.querySelector('.ticker-wrap');
+  const ts = document.getElementById('todoSection');
+  if(wb) wb.style.display = S.showWeather!==false?'flex':'none';
+  if(tw) tw.style.display = S.showNews!==false?'block':'none';
+  if(ts) ts.style.display = 'flex'; // avgångar alltid synliga
+}
+
+function openSettings(){
+  document.getElementById('sInterval').value=S.interval||15;
+  document.getElementById('sCity').value=S.city||'Stockholm';
+  document.getElementById('sGcalIds').value=(S.gcalIds||[]).join('\n');
+  document.getElementById('sEvents').value=(S.events||[]).map(e=>`${e.date}|${e.time}|${e.title}|${e.color}`).join('\n');
+  document.getElementById('sTodo').value=(S.todos||[]).map(t=>t.text).join('\n');
+  document.getElementById('sNews').value=(S.news||[]).join('\n');
+  setTog('togWeather',S.showWeather!==false);
+  setTog('togNews',S.showNews!==false);
+  setTog('togTodo',S.showTodo!==false);
+  setTog('togShuffle',S.shuffle!==false);
+  setTog('togTransit',S.showTransit!==false);
+  document.getElementById('settingsOverlay').classList.add('open');
+}
+function closeSettings(){document.getElementById('settingsOverlay').classList.remove('open');}
+
+function saveSettings(){
+  S.interval=parseInt(document.getElementById('sInterval').value)||15;
+  S.city=document.getElementById('sCity').value.trim()||'Stockholm';
+  S.gcalIds=document.getElementById('sGcalIds').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  S.events=document.getElementById('sEvents').value.split('\n').map(s=>s.trim()).filter(Boolean).map(line=>{const[date,time,title,color]=line.split('|');return{date:date||'idag',time:time||'',title:title||'',color:color||'c1'};});
+  S.todos=document.getElementById('sTodo').value.split('\n').map(s=>s.trim()).filter(Boolean).map(text=>({text,done:false}));
+  S.news=document.getElementById('sNews').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  S.showWeather=document.getElementById('togWeather').classList.contains('on');
+  S.showNews=document.getElementById('togNews').classList.contains('on');
+  S.showTodo=document.getElementById('togTodo').classList.contains('on');
+  S.shuffle=document.getElementById('togShuffle').classList.contains('on');
+  S.showTransit=document.getElementById('togTransit').classList.contains('on');
+  save(); applyVisibility(); renderTodo(S.todos); renderTicker(S.news);
+  fetchWeather(); clearInterval(slideTimer); loadPhotos(); fetchGoogleCalendar();
+  fetchDepartures(); closeSettings();
+}
+
+function setTog(id,val){const el=document.getElementById(id);val?el.classList.add('on'):el.classList.remove('on');}
+function loadState(){try{const s=localStorage.getItem('kd_v6');return s?{...DEFAULTS,...JSON.parse(s)}:{...DEFAULTS};}catch(e){return{...DEFAULTS};}}
+function save(){localStorage.setItem('kd_v6',JSON.stringify(S));}
+</script>
+</body>
+</html>
